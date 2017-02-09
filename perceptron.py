@@ -19,9 +19,11 @@ add the distance feature
 import networkx
 import numpy
 import edmonds
+import alternative_edmonds
 from nltk.corpus import dependency_treebank
 import features
 import logging
+from collections import namedtuple
 
 # for debugging
 import pdb
@@ -31,6 +33,9 @@ import pickle
 ETA = 1
 # number of iterations through all training set
 N_ITERATIONS = 2
+
+Arc = namedtuple('Arc', ('head', 'weight', 'tail'))  # reversed arc
+
 
 all_trees = dependency_treebank.parsed_sents()
 train_data = all_trees[:int(0.9 * len(all_trees))]
@@ -59,6 +64,23 @@ def make_graph(s, theta, f):
         for j in xrange(1, s_len):
             if i != j:
                 G[i][j] = numpy.dot(theta, f(s, i, j))
+    return G
+
+
+def graph_to_arc_list(G):
+    arc_list = []
+    for tail, heads_and_weights in G.items():
+        for head, weight in heads_and_weights.items():
+            arc_list.append(Arc(head, weight, tail))
+    return arc_list
+
+
+def arc_list_to_graph(arc_dict):
+    G = dict()
+    for key, arc in arc_dict.items():
+        if arc.tail not in G:
+            G[arc.tail] = dict()
+        G[arc.tail][arc.head] = arc.weight
     return G
 
 
@@ -142,7 +164,8 @@ def max_st(G, debug=False):
         new_G[i] = {}
         for j in G[i]:
             new_G[i][j] = -1 * G[i][j]
-    mst = edmonds.mst(0, new_G)
+    #mst = edmonds.mst(0, new_G)
+    mst = arc_list_to_graph(alternative_edmonds.min_spanning_arborescence(graph_to_arc_list(new_G), 0))
     return mst
 
 
@@ -196,3 +219,7 @@ def attachment_score(t, t_gold_standard):
     n_words = len(t)
     logger.debug("correct edges: " + str(edges & gold_edges))
     return len(edges & gold_edges) / (1. * n_words)
+
+
+t = train_data[:30]
+print perceptron(t)
