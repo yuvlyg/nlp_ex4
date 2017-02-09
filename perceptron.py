@@ -1,8 +1,4 @@
 """
-TODO
-seems like edmonds fails sometimes, e.g for the graph
-created by train_data[0]
-when theta is trained of first 10 trees
 
 TODO
 maybe use sparse arrays
@@ -27,7 +23,13 @@ from nltk.corpus import dependency_treebank
 import features
 import logging
 
+# for debugging
+import pdb
+import pickle
+
+# the learning ratio
 ETA = 1
+# number of iterations through all training set
 N_ITERATIONS = 2
 
 all_trees = dependency_treebank.parsed_sents()
@@ -53,7 +55,8 @@ def make_graph(s, theta, f):
     s_len = len(s)
     for i in xrange(s_len):
         G[i] = dict()
-        for j in xrange(s_len):
+        # j>=1 since no edges enter root
+        for j in xrange(1, s_len):
             if i != j:
                 G[i][j] = numpy.dot(theta, f(s, i, j))
     return G
@@ -90,11 +93,13 @@ def get_sum_of_features_on_arcs(tree, sent, f):
         s += f(sent, edge[0], edge[1])
     return s
 
-
-def all_edges(tree, index=0):
+# TODO remove depth constrain
+def all_edges(tree, index=0, depth=0):
     """
     return a list of all edges of a tree
     """
+    if depth == 30:
+        pdb.set_trace()
     if index not in tree or len(tree[index]) == 0:
         # for a leaf empty list
         logger.debug("leaf: %d" % index)
@@ -104,7 +109,7 @@ def all_edges(tree, index=0):
         logger.debug("edge %d,%d" % (index, child))
         edges.append((index, child))
         # recurse over of sub-tree
-        edges.extend(all_edges(tree, child))
+        edges.extend(all_edges(tree, child, depth + 1))
     return edges
 
 #
@@ -132,10 +137,12 @@ def max_st(G, debug=False):
     :param G:
     :return: MST
     """
+    new_G = {}
     for i in G:
+        new_G[i] = {}
         for j in G[i]:
-            G[i][j] = 1000 - G[i][j]
-    mst = edmonds.mst(0, G)
+            new_G[i][j] = -1 * G[i][j]
+    mst = edmonds.mst(0, new_G)
     return mst
 
 
