@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 """
 
 TODO
@@ -27,6 +29,7 @@ from collections import namedtuple
 
 # for debugging
 import pdb
+import send_mail
 import pickle
 
 # the learning ratio
@@ -44,9 +47,11 @@ test_data = all_trees[int(0.9 * len(all_trees)):]
 train_data = all_trees[:int(0.1 * len(all_trees))]
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 if not logger.handlers:
-    logger.addHandler(logging.StreamHandler())
+    l = logging.StreamHandler()
+    l.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+    logger.addHandler(l)
 
 
 def make_graph(s, theta, f):
@@ -71,16 +76,16 @@ def graph_to_arc_list(G):
     arc_list = []
     for tail, heads_and_weights in G.items():
         for head, weight in heads_and_weights.items():
-            arc_list.append(Arc(head, weight, tail))
+            arc_list.append(Arc(tail, weight, head))
     return arc_list
 
 
 def arc_list_to_graph(arc_dict):
     G = dict()
     for key, arc in arc_dict.items():
-        if arc.tail not in G:
-            G[arc.tail] = dict()
-        G[arc.tail][arc.head] = arc.weight
+        if arc.head not in G:
+            G[arc.head] = dict()
+        G[arc.head][arc.tail] = arc.weight
     return G
 
 
@@ -188,7 +193,8 @@ def perceptron(train_data):
     sum_thetas = numpy.array([0] * n_features)
     theta = numpy.array([0] * n_features)
     for n in xrange(N_ITERATIONS):
-        for tree in train_data:
+        for i, tree in enumerate(train_data):
+            logger.info('Working on tree # %d' % i)
             sent = get_words_and_tags(tree)
             t_prime = choose_dependency_tree(sent, theta, f)
 
@@ -200,6 +206,15 @@ def perceptron(train_data):
     return sum_thetas / (1. * N_ITERATIONS * len(train_data))
 
 
+def attachment_score_on_test(f, theta, test_data):
+    sum_attachment = 0
+    for t in test_data:
+        sent = get_words_and_tags(t)
+        our_t = choose_dependency_tree(sent, theta, f)
+        sum_attachment += attachment_score(our_t, t)
+    return sum_attachment / len(test_data)
+
+
 def choose_dependency_tree(sent, theta, f):
     """
     choose the best dependency tree
@@ -209,7 +224,9 @@ def choose_dependency_tree(sent, theta, f):
     :return: the tree
     """
     G = make_graph(sent, theta, f)
-    return max_st(G)
+    tree = max_st(G)
+    assert len(all_edges(tree, 0)) == len(sent) - 1
+    return tree
 
 
 def attachment_score(t, t_gold_standard):
@@ -220,6 +237,7 @@ def attachment_score(t, t_gold_standard):
     logger.debug("correct edges: " + str(edges & gold_edges))
     return len(edges & gold_edges) / (1. * n_words)
 
-
-t = train_data[:30]
-print perceptron(t)
+if __name__ == "__main__":
+    theta = perceptron(train_data[:5])
+    pickle.dump(theta, open('theta.pickle', 'w'))
+    send_mail.send_mail('Perceptron is done', 'Do not reply to this mail. Click here to unsubscribe')
