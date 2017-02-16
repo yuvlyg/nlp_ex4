@@ -1,14 +1,6 @@
 #!/usr/bin/python
 
 """
-
-TODO
-maybe use sparse arrays
-
-TODO
-used 1000-weight to choose maximum, not minimum
-1000 is to enforce positive weights (maybe not necessary)
-
 TODO
 make sure attachment score is correct
 
@@ -17,10 +9,7 @@ add the distance feature
 """
 
 
-
-import networkx
 import numpy
-import edmonds
 import alternative_edmonds
 from nltk.corpus import dependency_treebank
 import features
@@ -43,8 +32,6 @@ Arc = namedtuple('Arc', ('head', 'weight', 'tail'))  # reversed arc
 all_trees = dependency_treebank.parsed_sents()
 train_data = all_trees[:int(0.9 * len(all_trees))]
 test_data = all_trees[int(0.9 * len(all_trees)):]
-# TODO REMOVE THIS
-train_data = all_trees[:int(0.1 * len(all_trees))]
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -68,7 +55,10 @@ def make_graph(s, theta, f):
         # j>=1 since no edges enter root
         for j in xrange(1, s_len):
             if i != j:
-                G[i][j] = numpy.dot(theta, f(s, i, j))
+                # < theta, features >
+                # must call it that way, cause f returns a sparse matrix
+                # and numpy doesn't handle it well
+                G[i][j] = f(s, i, j).dot(theta)[0]
     return G
 
 
@@ -115,18 +105,16 @@ def get_sum_of_features_on_arcs(tree, sent, f):
     if not isinstance(tree, dict):
         tree = simplify_tree(tree)
     n_features = f(0, 0, 0, True)
-    s = numpy.array([0] * n_features)
+    s = features.make_empty_vector(n_features)
     for edge in all_edges(tree):
         s += f(sent, edge[0], edge[1])
     return s
 
-# TODO remove depth constrain
-def all_edges(tree, index=0, depth=0):
+
+def all_edges(tree, index=0):
     """
     return a list of all edges of a tree
     """
-    if depth == 30:
-        pdb.set_trace()
     if index not in tree or len(tree[index]) == 0:
         # for a leaf empty list
         logger.debug("leaf: %d" % index)
@@ -136,27 +124,9 @@ def all_edges(tree, index=0, depth=0):
         logger.debug("edge %d,%d" % (index, child))
         edges.append((index, child))
         # recurse over of sub-tree
-        edges.extend(all_edges(tree, child, depth + 1))
+        edges.extend(all_edges(tree, child))
     return edges
 
-#
-# def max_st(G, debug=False):
-#     """
-#     find the MAXIMUM spanning tree
-#     :param G:
-#     :return: MST
-#     """
-#     Gnx = networkx.DiGraph()
-#     for i in xrange(len(G)):
-#         Gnx.add_node(i)
-#     for i in G:
-#         for j in G[i]:
-#             Gnx.add_edge(i, j, weight=-G[i][j])
-#     if debug:
-#         return Gnx
-#     mst = networkx.algorithms.tree.Edmonds(Gnx, 0).find_optimum()
-#
-#     return mst
 
 def max_st(G, debug=False):
     """
@@ -169,7 +139,6 @@ def max_st(G, debug=False):
         new_G[i] = {}
         for j in G[i]:
             new_G[i][j] = -1 * G[i][j]
-    #mst = edmonds.mst(0, new_G)
     mst = arc_list_to_graph(alternative_edmonds.min_spanning_arborescence(graph_to_arc_list(new_G), 0))
     return mst
 
@@ -192,7 +161,7 @@ def perceptron(train_data):
     logger.info("Doing the stuff")
     sum_thetas = numpy.array([0] * n_features)
     theta = numpy.array([0] * n_features)
-    for n in xrange(N_ITERATIONS):
+    for _ in xrange(N_ITERATIONS):
         for i, tree in enumerate(train_data):
             logger.info('Working on tree # %d' % i)
             sent = get_words_and_tags(tree)
@@ -200,13 +169,15 @@ def perceptron(train_data):
 
             sum_over_t = get_sum_of_features_on_arcs(tree, sent, f)
             sum_over_t_prime = get_sum_of_features_on_arcs(t_prime, sent, f)
-            theta = theta + ETA * (sum_over_t - sum_over_t_prime)
+            addend = (sum_over_t - sum_over_t_prime).toarray()[0]  # [0] to convert from matrix to vector
+            theta = theta + ETA * addend
             sum_thetas += theta
 
     return sum_thetas / (1. * N_ITERATIONS * len(train_data))
 
 
 def attachment_score_on_test(f, theta, test_data):
+    logger.info('Begin computing attachment score on test data (%d sentences)' % len(test_data))
     sum_attachment = 0
     for t in test_data:
         sent = get_words_and_tags(t)
@@ -238,6 +209,6 @@ def attachment_score(t, t_gold_standard):
     return len(edges & gold_edges) / (1. * n_words)
 
 if __name__ == "__main__":
-    theta = perceptron(train_data[:5])
-    pickle.dump(theta, open('theta.pickle', 'w'))
+    theta = perceptron(train_data)
+    pickle.dump(theta, open('theta_new.pickle', 'w'))
     send_mail.send_mail('Perceptron is done', 'Do not reply to this mail. Click here to unsubscribe')
