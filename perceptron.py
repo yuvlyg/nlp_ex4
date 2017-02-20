@@ -15,10 +15,10 @@ from nltk.corpus import dependency_treebank
 import features
 import logging
 from collections import namedtuple
-
+import sys
 # for debugging
 import pdb
-import send_mail
+#import send_mail
 import pickle
 
 # the learning ratio
@@ -30,7 +30,6 @@ Arc = namedtuple('Arc', ('head', 'weight', 'tail'))  # reversed arc
 
 
 all_trees = dependency_treebank.parsed_sents()
-train_data = all_trees[:int(0.9 * len(all_trees))]
 test_data = all_trees[int(0.9 * len(all_trees)):]
 
 logger = logging.getLogger()
@@ -143,7 +142,7 @@ def max_st(G, debug=False):
     return mst
 
 
-def make_f(train_data):
+def make_f(train_data, is_distance=False):
     words = set([])
     tags = set([])
     for tree in train_data:
@@ -152,11 +151,11 @@ def make_f(train_data):
             tags.add(t)
     logger.info("Making Feature Function (%d words, %d tags)"
                 % (len(words), len(tags)))
-    return features.make_feature_function(words, tags)
+    return features.make_feature_function(words, tags, is_distance)
 
 
-def perceptron(train_data):
-    f = make_f(train_data)
+def perceptron(train_data, is_distance=False):
+    f = make_f(train_data, is_distance)
     n_features = f(0, 0, 0, True)  # magic input to get the number of features
     logger.info("Doing the stuff")
     sum_thetas = numpy.array([0] * n_features)
@@ -173,8 +172,8 @@ def perceptron(train_data):
             theta = theta + ETA * addend
             sum_thetas += theta
 
-    return sum_thetas / (1. * N_ITERATIONS * len(train_data))
-
+    final_theta = sum_thetas / (1. * N_ITERATIONS * len(train_data))
+    return final_theta, f
 
 def attachment_score_on_test(f, theta, test_data):
     logger.info('Begin computing attachment score on test data (%d sentences)' % len(test_data))
@@ -209,6 +208,17 @@ def attachment_score(t, t_gold_standard):
     return len(edges & gold_edges) / (1. * n_words)
 
 if __name__ == "__main__":
-    theta = perceptron(train_data)
-    pickle.dump(theta, open('theta_new.pickle', 'w'))
-    send_mail.send_mail('Perceptron is done', 'Do not reply to this mail. Click here to unsubscribe')
+    if len(sys.argv) >= 2:
+        perc = int(sys.argv[1])
+    else:
+        perc = 90
+    train_data = all_trees[:int(perc * 0.01 * len(all_trees))]
+    if len(sys.argv) >= 3 and sys.argv[2] == "true":
+        is_distance = True
+    else:
+        is_distance = False
+    theta, f = perceptron(train_data, is_distance)
+
+    logger.info("Attachment score on the test data = {att}".format(att=attachment_score_on_test(f, theta, test_data)))
+    #pickle.dump(theta, open('theta_new.pickle', 'w'))
+    #send_mail.send_mail('Perceptron is done', 'Do not reply to this mail. Click here to unsubscribe')
