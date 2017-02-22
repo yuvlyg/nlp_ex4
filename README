@@ -1,0 +1,35 @@
+=======
+NLP Ex4
+=======
+This code computes dependency trees for labeled sentences.
+It is done using MST parsing, with weights vector learned using averaged perceptron.
+
+
+
+========
+Files:
+========
+features.py   - Generates a feature function (a feature for each pair of word forms 
+                and pair of PoS tags). The features vector is represented as a sparse
+                matrix, which improves efficiency significantly
+perceptron.py - The learning algorithm and MST inference
+emonds.py     - Implementing Chu-Liu-Edmonds algorithm for finding a minimal spanning 
+                tree in a directed graph.
+                Taken from http://stackoverflow.com/questions/23988236/chu-liu-edmonds
+                -algorithm-for-minimum-spanning-tree-on-directed-graphs
+
+
+
+========
+Usage:
+========
+nltk's treebank, numpy and scipy should be installed
+./perceptron [train_size [use_distance]]
+train_size is the percentage of data to use as training (default is 90)
+use_distance is whether to use distance features (default is false)
+The reported results were achieved using: 
+./perceptron 90 false
+./perceptron 90 true
+
+
+

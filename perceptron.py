@@ -1,31 +1,19 @@
 #!/usr/bin/python
 
-"""
-TODO
-make sure attachment score is correct
-
-TODO
-add the distance feature
-"""
-
-
 import numpy
-import alternative_edmonds
+import edmonds
 from nltk.corpus import dependency_treebank
 import features
 import logging
 from collections import namedtuple
 import sys
-# for debugging
-import pdb
-#import send_mail
-import pickle
 
 # the learning ratio
 ETA = 1
 # number of iterations through all training set
 N_ITERATIONS = 2
 
+# used in edmonds
 Arc = namedtuple('Arc', ('head', 'weight', 'tail'))  # reversed arc
 
 
@@ -138,7 +126,7 @@ def max_st(G, debug=False):
         new_G[i] = {}
         for j in G[i]:
             new_G[i][j] = -1 * G[i][j]
-    mst = arc_list_to_graph(alternative_edmonds.min_spanning_arborescence(graph_to_arc_list(new_G), 0))
+    mst = arc_list_to_graph(edmonds.min_spanning_arborescence(graph_to_arc_list(new_G), 0))
     return mst
 
 
@@ -220,5 +208,4 @@ if __name__ == "__main__":
     theta, f = perceptron(train_data, is_distance)
 
     logger.info("Attachment score on the test data = {att}".format(att=attachment_score_on_test(f, theta, test_data)))
-    #pickle.dump(theta, open('theta_new.pickle', 'w'))
-    #send_mail.send_mail('Perceptron is done', 'Do not reply to this mail. Click here to unsubscribe')
+
